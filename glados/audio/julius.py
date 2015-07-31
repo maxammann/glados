@@ -30,17 +30,17 @@ class Julius:
     def connect_adin(self):
         try:
             self.s.connect((self.host, self.adin_port))
-        except RuntimeError:
+        except socket.error:
             return False
 
         return True
 
     def disconnect(self):
-        self.s.close()
-
         self.client.stop()  # send the stop signal
         self.client.join()  # wait for the thread to die
         self.client.disconnect()  # disconnect from julius
+
+        self.s.close()
 
     def send_audio(self, buffer):
         # https://github.com/Cinderella-Man/tofik/blob/master/adintool/adintool.c#L684

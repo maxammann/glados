@@ -1,11 +1,10 @@
 import io
 import os
 import wave
-from gtts import gTTS
-import pyvona
 import time
+
 from glados.audio.mp3_decoder import mp3_decode
-from glados.audio.tts.ivona import Ivona
+from glados.audio.ivona import Ivona
 
 CHUNK = 1024
 this_dir, this_filename = os.path.split(__file__)
@@ -18,7 +17,6 @@ def open_microphone(audio, channels, rate, sample_size):
     return audio.open(format=width,
                       channels=channels,
                       rate=rate,
-                      frames_per_buffer=CHUNK,
                       output=True)
 
 
@@ -26,10 +24,10 @@ class Playback:
     def __init__(self, audio):
         self.audio = audio
 
-    def play_wav(self, path, channels, rate, sample_size):
-        stream = open_microphone(self.audio, channels, rate, sample_size)
-
+    def play_wav(self, path):
         wf = wave.open(path, 'rb')
+
+        stream = open_microphone(self.audio, wf.getnchannels(), wf.getframerate(), wf.getsampwidth())
 
         data = wf.readframes(CHUNK)
 
@@ -41,10 +39,10 @@ class Playback:
         stream.close()
 
     def play_high_beep(self):
-        self.play_wav(high_beep, 2, 44100, 2)
+        self.play_wav(high_beep)
 
     def play_low_beep(self,):
-        self.play_wav(low_beep, 2, 44100, 2)
+        self.play_wav(low_beep)
 
     def play_raw(self, audio_data, channels, rate, sample_size):
         stream = open_microphone(self.audio, channels, rate, sample_size)

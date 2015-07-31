@@ -61,10 +61,11 @@ def save_speech(audio, data):
 
 
 class Recognizer:
-    def __init__(self, audio):
+    def __init__(self, audio, threshold=50):
         self.audio = audio
         self.stream = None
-        self.threshold = 50
+        self.threshold = threshold
+        self.interrupt_ = False
 
     def open(self):
         self.stream = self.audio.open(format=pyaudio.paInt16,
@@ -77,10 +78,25 @@ class Recognizer:
         self.stream.stop_stream()
         self.stream.close()
 
+    def interrupt(self):
+        """
+        Interrupts the listen() method
+        """
+        self.interrupt_ = True
+
+    def continues(self):
+        """
+        Continues the listen() method
+        """
+        self.interrupt_ = False
+
     def sample_threshold(self, duration=1):
         self.threshold = sample_threshold(self.stream, duration)
 
     def listen(self):
+        if self.interrupt_:
+            return None
+
         # save some memory for sound data
         frames = []
 
@@ -96,6 +112,8 @@ class Recognizer:
                 listening = True
             elif listening:
                 break
+            elif self.interrupt_:
+                return None
 
         # cutoff any recording before this disturbance was detected
         frames = frames[-20:]

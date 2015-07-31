@@ -1,21 +1,29 @@
+import pkgutil
 import threading
 import time
-import pyaudio
 import signal
+import logging
+
+import pyaudio
+
 from glados.audio.playback import Playback
 from glados.audio.recognizer import Recognizer
 from glados.audio.suppress_alsa import noalsaerr
-from glados.julius import Julius
-from glados.passive import start_passive_listening, start_passive_recognizing
+from glados.audio.julius import Julius
+from glados.modules import Modules
+from glados.passive import start_passive_recognizing, start_listening
 from glados import passive
 
 
-def shutdown(signal, frame):
-    passive.running = False
-
-
 def run():
+    this_dir, this_filename = pkgutil.os.path.split(__file__)
+    locations = [pkgutil.os.path.join(this_dir, "../modules")]
+    modules = Modules(logging.getLogger(), locations)
+
+    modules.get_modules()[3].MODULE["class"](Playback(pyaudio.PyAudio())).handle()
+
     # Playback(pyaudio.PyAudio()).play_tts("Hello World")
+    # Playback(pyaudio.PyAudio()).play_high_beep()
 
     julius = Julius()
 
@@ -50,17 +58,20 @@ def run():
 
     print "Threshhold " + str(recognizer.threshold)
 
+    def shutdown(signal, frame):
+        passive.stop(recognizer)
+
     signal.signal(signal.SIGINT, shutdown)
 
     print("Starting listening thread")
-    t = threading.Thread(target=start_passive_listening, args=[recognizer, julius])
+    t = threading.Thread(target=start_listening, args=[recognizer])
     t.start()
 
     start_passive_recognizing(playback, recognizer, julius)
 
     print('Exiting...')
-
-    shutdown(signal.SIGINT, 0)
     julius.disconnect()
+
+    t.join()
     recognizer.close()
     audio.terminate()

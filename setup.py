@@ -12,7 +12,12 @@ setup(
     install_requires=['PyAudio',
                       'pyjulius',
                       'gTTS',
-                      'pyvona'],
+                      'pyvona',
+
+                      'flask',
+                      'pympris',
+
+                      'python-mpd2'],
     scripts=['scripts/glados-run'],
     include_package_data=True,
 )

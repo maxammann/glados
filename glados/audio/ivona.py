@@ -1,7 +1,5 @@
 from pyvona import Voice, PyvonaException
 
-__author__ = 'max'
-
 
 class Ivona(Voice):
 
