@@ -1,12 +1,12 @@
-import pyjulius
 import socket
 import struct
+
+import pyjulius
 
 TERMINATOR = struct.pack("I", 0)
 
 
 class Julius:
-
     def __init__(self, host="localhost", module_port=10500, adin_port=5530):
         self.host = host
         self.adin_port = adin_port

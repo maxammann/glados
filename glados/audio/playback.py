@@ -3,6 +3,8 @@ import os
 import wave
 import time
 
+from langdetect import detect
+
 from glados.audio.mp3_decoder import mp3_decode
 from glados.audio.ivona import Ivona
 
@@ -41,7 +43,7 @@ class Playback:
     def play_high_beep(self):
         self.play_wav(high_beep)
 
-    def play_low_beep(self,):
+    def play_low_beep(self, ):
         self.play_wav(low_beep)
 
     def play_raw(self, audio_data, channels, rate, sample_size):
@@ -51,24 +53,31 @@ class Playback:
         stream.stop_stream()
         stream.close()
 
-    def play_tts(self, text):
+    def play_tts(self, text, lang=None):
+        text = str(text)
         v = Ivona("GDNAI3522R3EVOJTXNZQ", "iqQ0grzlzTTNOP+Ab6hQm+eMZ1jPa+x802mbfbNu")
         v.codec = "mp3"
-        v.region = 'us-east'
-        v.voice_name = "Salli"
+
+        if lang is None:
+            lang = detect(text)
+
+        if lang == "de":
+            v.voice_name = "Marlene"
+        else:
+            v.voice_name = "Salli"
 
         tts_audio = io.BytesIO()
         v.fetch_voice_fp(text, tts_audio)
-        v.fetch_voice(text, "test")
+        # v.fetch_voice(text, "test")
         raw_audio = mp3_decode(tts_audio.getvalue())
 
         self.play_raw(raw_audio, 1, 22050, 2)
 
-    # def play_tts(self, text, language="en"):
-    #     tts = gTTS(text=text, lang=language)
-    #     tts_audio = io.BytesIO()
-    #     tts.write_to_fp(tts_audio)
-    #     print tts_audio.getvalue()
-    #     raw_audio = mp3_decode(tts_audio.getvalue())
-    #
-    #     self.play_raw(raw_audio, 1, 16000, 2)
+        # def play_tts(self, text, language="en"):
+        #     tts = gTTS(text=text, lang=language)
+        #     tts_audio = io.BytesIO()
+        #     tts.write_to_fp(tts_audio)
+        #     print tts_audio.getvalue()
+        #     raw_audio = mp3_decode(tts_audio.getvalue())
+        #
+        #     self.play_raw(raw_audio, 1, 16000, 2)

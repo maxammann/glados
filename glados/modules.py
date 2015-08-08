@@ -1,8 +1,11 @@
 import pkgutil
 
+from glados.module import ModuleInfo
+
 
 class Modules(object):
-    def __init__(self, logger, locations):
+    def __init__(self, logger, locations, playback):
+        self.playback = playback
         self.locations = locations
         self.logger = logger
         self.modules = self.get_modules()
@@ -24,30 +27,35 @@ class Modules(object):
             else:
                 if hasattr(module, 'MODULE'):
                     self.logger.debug("Found module: %s", module.MODULE)
-                    modules.append(module)
+                    info = ModuleInfo(module.MODULE)
+                    instance = info.create(self.playback)
+                    instance.start()
+                    info.set_instance(instance)
+                    modules.append(info)
 
-        modules.sort(key=lambda mod: mod.PRIORITY if hasattr(mod, 'PRIORITY') else 0, reverse=True)
+        modules.sort(key=lambda info: info.priority if hasattr(info, 'priority') else 0, reverse=True)
         return modules
 
-        # def query(self, texts):
-        #     for module in self.modules:
-        #         for text in texts:
-        #
-        #             if module.isValid(text):
-        #                 self.logger.debug("'%s' is a valid phrase for module " +
-        #                                   "'%s'", text, module.__name__)
-        #                 try:
-        #                     module.handle(text, self.mic, self.profile)
-        #                 except:
-        #                     self.logger.error('Failed to execute module',
-        #                                       exc_info=True)
-        #                     self.mic.say("I'm sorry. I had some trouble with " +
-        #                                  "that operation. Please try again later.")
-        #                 else:
-        #                     self.logger.debug("Handling of phrase '%s' by " +
-        #                                       "module '%s' completed", text,
-        #                                       module.__name__)
-        #                 finally:
-        #                     return
-        #     self.logger.debug("No module was able to handle any of these " +
-        #                       "phrases: %r", texts)
+    def stop_modules(self):
+        for info in self.modules:
+            info.get_instance().shutdown()
+
+    def handle_by_list(self, words):
+        return self.query(words).handle(words)
+
+    def handle(self, text):
+        words = text.lower()
+        return self.query_by_list(words).handle(words)
+
+    def query(self, text):
+        return self.query(text.lower())
+
+    def query_by_list(self, words):
+        if len(self.modules) == 0:
+            return None
+
+        for info in self.modules:
+            if info.is_responsibly(words):
+                return info.get_instance()
+
+        return self.modules[-1].get_instance()

@@ -2,7 +2,6 @@ from pyvona import Voice, PyvonaException
 
 
 class Ivona(Voice):
-
     def fetch_voice_fp(self, text_to_speak, f):
         """Fetch a voice file for given text and save it to the given file name
         """

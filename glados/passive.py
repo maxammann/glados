@@ -1,109 +1,141 @@
 import Queue
+import sys
 
 import pyjulius
 
-running = True
-queue = Queue.Queue()
-STOP_TOKEN = object()
-wait_for_julius = False
+from glados.matrix.matrix import discover_matrix
 
 
-def stop(recognizer):
-    print "Stopping"
-    global running
-    running = False
-    queue.put(STOP_TOKEN)
-    recognizer.interrupt()
+class Passive:
+    STOP_TOKEN = object()
 
+    def __init__(self, playback, recognizer, julius, modules):
+        self.julius = julius
+        self.modules = modules
+        self.recognizer = recognizer
+        self.playback = playback
 
-def recognize(playback, recognizer, data):
-    playback.play_high_beep()
+        self.running = True
+        self.segments = Queue.Queue()
+        self.passive = True
 
-    print("Recognizing input...")
+    def recognize(self, data):
 
-    try:
-        text = str(recognizer.recognize(data))
-        print("You said " + text)
+        print("Recognizing input...")
 
-        playback.play_tts(text)
-    except LookupError as e:
-        playback.play_low_beep()
-        print(e.message)
-
-    return True
-
-
-def is_activated(julius):
-    global wait_for_julius
-    result = julius.client.results.get()
-
-    if isinstance(result, pyjulius.Sentence):
-        words = [word.word.encode("UTF-8") for word in result.words]
-
-        if "GLADOS" in words:
-            return True
-        else:
-            wait_for_julius = False
-            print("Switching to passive...")
-
-    return False
-
-
-def start_listening(recognizer):
-    while running:
         try:
-            data = recognizer.listen()
+            text = str(self.recognizer.recognize(data, show_all=True))
+            print("You said: " + text)
+            # self.playback.play_tts(text)
+        except LookupError as e:
+            self.playback.play_low_beep()
+            text = e.message
 
-            queue.put(data)
-        except KeyboardInterrupt:
-            break
-
-
-def get_recorded():
-    data = queue.get(True, 1000)
-
-    if data is STOP_TOKEN:
-        return STOP_TOKEN
-
-    result = []
-
-    while queue.qsize() > 0:
-        get = queue.get(True, 1000)
-        if get is STOP_TOKEN:
-            return STOP_TOKEN
-        result.append(get)
-
-    result.insert(0, data)
-
-    return "".join(result)
-
-
-def start_passive_recognizing(playback, recognizer, julius):
-    global wait_for_julius
-
-    while running:
         try:
+            self.modules.handle(text)
+        except Exception as e:
+            print("Unexpected error in module: " + e.message)
 
-            # condition
-            if not wait_for_julius:
-                print("Recording for julius")
-                data = get_recorded()
-                if data is STOP_TOKEN:
-                    break
-                print("Sending audio to julius")
-                julius.send_audio(data)
-                wait_for_julius = True
+        discover_matrix().pause()  # todo test
+
+        return True
+
+    def stop(self):
+        self.running = False
+        self.segments.put(self.STOP_TOKEN)
+
+    def listen(self):
+        while self.running:
+            try:
+                data = self.recognizer.listen(min_duration=2)
+
+                if data is None:
+                    continue
+
+                self.segments.put(data)
+            except KeyboardInterrupt:
+                break
+
+    def get_segments(self):
+        # todo retry if timeout
+        data = self.segments.get(True, sys.maxint)
+
+        if data is self.STOP_TOKEN:
+            return self.STOP_TOKEN
+
+        result = []
+
+        while self.segments.qsize() > 0:
+            get = self.segments.get(True, sys.maxint)
+            if get is self.STOP_TOKEN:
+                return self.STOP_TOKEN
+            result.append(get)
+
+        result.insert(0, data)
+
+        return "".join(result)
+
+    last_passive = None
+
+    def recognize_string(self, data, text):
+        try:
+            lower = str(self.recognizer.recognize(data, show_all=True)).lower()
+
+            if text in lower:
+                return True
             else:
-                if is_activated(julius):
-                    print("Waiting for input...")
-                    data = get_recorded()
-                    if data is STOP_TOKEN:
+                return False
+        except LookupError:
+            return False
+
+    def is_activated(self):
+        result = self.julius.client.results.get()
+
+        if isinstance(result, pyjulius.Sentence):
+            words = [word.word.encode("UTF-8") for word in result.words]
+
+            if "ALEXA" in words:
+                if self.last_passive and self.recognize_string(self.last_passive, "alexa"):
+                    return True
+            print("Switching to passive...")
+            self.passive = True
+
+        return False
+
+    def passive_recognize(self):
+
+        while self.running:
+            try:
+
+                if self.passive:
+                    print("Recording for julius")
+                    data = self.get_segments()
+                    if data is self.STOP_TOKEN:
                         break
 
-                    recognize(playback, recognizer, data)
+                    self.last_passive = data
+                    print("Sending audio to julius")
+                    self.julius.send_audio(data)
+                    print("Finished")
+                    self.passive = False
+                else:
+                    if self.is_activated():
+                        print("Activated")
 
-                    wait_for_julius = False
-                    print("Switching to passive...")
+                        self.playback.play_high_beep()
+                        discover_matrix().unpause()  # todo test
 
-        except KeyboardInterrupt:
-            break
+                        print("Waiting for input...")
+
+                        data = self.get_segments()
+                        # todo only continue if there's enough data
+                        if data is self.STOP_TOKEN:
+                            break
+
+                        self.recognize(data)
+
+                        self.passive = True
+                        print("Switching to passive...")
+
+            except KeyboardInterrupt:
+                break

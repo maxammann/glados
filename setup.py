@@ -13,10 +13,8 @@ setup(
                       'pyjulius',
                       'gTTS',
                       'pyvona',
-
-                      'flask',
-                      'pympris',
-
+                      'protobuf',
+                      'langdetect',
                       'python-mpd2'],
     scripts=['scripts/glados-run'],
     include_package_data=True,

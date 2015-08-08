@@ -1,0 +1,6 @@
+* Catch exception in modules
+* Validate all possibilities from google speech
+* set minimum segment duration
+* better threshold multiplier
+* fix self recording for beeps, maybe no beeps?
+* adjust threshold during run

@@ -4,8 +4,8 @@ from glados.module import Module
 
 class TimeModule(Module):
 
-    def handle(self):
-        self.playback.play_tts(time.strftime('%l:%M%p %Z on %b %d, %Y'))
+    def handle(self, words):
+        self.playback.play_tts("It is " + time.strftime('%H %M'), lang="en")
         pass
 
 MODULE = {
@@ -13,5 +13,6 @@ MODULE = {
     'description': "Tells the time",
     'version': "0.1",
     'words': ["time", "clock"],
-    'class': TimeModule
+    'priority': 0,
+    'cls': TimeModule
 }

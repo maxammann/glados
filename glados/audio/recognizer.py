@@ -2,8 +2,9 @@ import time
 import wave
 import audioop
 import json
-import pyaudio
 from urllib2 import URLError, Request, urlopen
+
+import pyaudio
 
 SPEECH_URL = "http://www.google.com/speech-api/v2/recognize?client=chromium&lang=%s&key=%s"
 
@@ -13,7 +14,7 @@ CHANNELS = 1
 RATE = 16000
 CHUNK = 1024
 
-DELAY_MULTIPLIER = 0.6
+DELAY_MULTIPLIER = 1.4
 
 
 def get_score(data):
@@ -93,7 +94,7 @@ class Recognizer:
     def sample_threshold(self, duration=1):
         self.threshold = sample_threshold(self.stream, duration)
 
-    def listen(self):
+    def listen(self, min_duration=0, max_duration=8):
         if self.interrupt_:
             return None
 
@@ -103,16 +104,21 @@ class Recognizer:
         # flag raised when sound disturbance detected
         listening = False
 
+        start_time = time.time()
+
         while True:
             data = self.stream.read(CHUNK)
             frames.append(data)
             score = get_score(data)
 
+            current_time = time.time()
+
             if score > self.threshold:
                 listening = True
-            elif listening:
+            elif listening and current_time - start_time > min_duration:
                 break
-            elif self.interrupt_:
+
+            if self.interrupt_ or current_time - start_time > max_duration:
                 return None
 
         # cutoff any recording before this disturbance was detected
