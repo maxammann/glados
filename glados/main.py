@@ -71,27 +71,33 @@ def run():
 
     print "Threshhold " + str(recognizer.threshold)
 
-    def shutdown(signal, frame):
-        recognizer.interrupt()
-        passive.stop()
-
-    signal.signal(signal.SIGINT, shutdown)
-
     print("Starting listening thread")
-    t = threading.Thread(target=passive.listen)
-    t.start()
+    passive_thread = threading.Thread(target=passive.listen)
+    passive_thread.start()
 
-    try:
-        passive.passive_recognize()
-    except Exception as e:
-        traceback.print_exc(e)
+    thread = threading.Thread(target=passive.passive_recognize)
+    thread.start()
+
+    # If we block the main thread we'll be unable to stop the other threads
+    while passive.running:
+        try:
+            thread.join(timeout=2)
+        except KeyboardInterrupt:
+            break
 
     print('Exiting...')
+    passive.stop()
+    recognizer.interrupt()
+
     modules.stop_modules()
 
-    julius.disconnect()
+    passive_thread.join()
 
-    t.join()
+    julius.disconnect()
     recognizer.close()
     audio.terminate()
+
+    print("Stopping julius...")
     julius_process.terminate()
+    julius_process.wait()
+

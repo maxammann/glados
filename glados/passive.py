@@ -1,14 +1,11 @@
 import Queue
-import sys
+from pyjulius.models import Sentence
 
-import pyjulius
-
+from glados.byte_buffer_queue import ByteBufferQueue
 from glados.matrix.matrix import discover_matrix
 
 
 class Passive:
-    STOP_TOKEN = object()
-
     def __init__(self, playback, recognizer, julius, modules):
         self.julius = julius
         self.modules = modules
@@ -16,7 +13,7 @@ class Passive:
         self.playback = playback
 
         self.running = True
-        self.segments = Queue.Queue()
+        self.segments = ByteBufferQueue()
         self.passive = True
 
     def recognize(self, data):
@@ -42,7 +39,7 @@ class Passive:
 
     def stop(self):
         self.running = False
-        self.segments.put(self.STOP_TOKEN)
+        self.segments.destroy()
 
     def listen(self):
         while self.running:
@@ -52,30 +49,14 @@ class Passive:
                 if data is None:
                     continue
 
-                self.segments.put(data)
+                self.segments.append(data)
             except KeyboardInterrupt:
                 break
 
     def get_segments(self):
-        # todo retry if timeout
-        data = self.segments.get(True, sys.maxint)
+        return self.segments.pop()
 
-        if data is self.STOP_TOKEN:
-            return self.STOP_TOKEN
-
-        result = []
-
-        while self.segments.qsize() > 0:
-            get = self.segments.get(True, sys.maxint)
-            if get is self.STOP_TOKEN:
-                return self.STOP_TOKEN
-            result.append(get)
-
-        result.insert(0, data)
-
-        return "".join(result)
-
-    last_passive = None
+    active = False
 
     def recognize_string(self, data, text):
         try:
@@ -88,54 +69,77 @@ class Passive:
         except LookupError:
             return False
 
-    def is_activated(self):
-        result = self.julius.client.results.get()
+    def is_activated(self, data):
+        ret = False
+        print("Testing activated")
+        while self.running:
+            print("Getting result")
+            try:
+                result = self.julius.client.results.get(timeout=3)
+            except Queue.Empty:
+                break
+            print("Finished Getting result")
+            if result.tag == 'RECOGOUT':
+                sentence = Sentence.from_shypo(result.find('SHYPO'))
+                words = [word.word.encode("UTF-8") for word in sentence.words]
 
-        if isinstance(result, pyjulius.Sentence):
-            words = [word.word.encode("UTF-8") for word in result.words]
+                if "ALEXA" in words:
+                    print("Start google recognize ")
+                    if self.recognize_string(data, "alexa"):
+                        ret = True
+                        break
+                print("Switching to passive...")
+                break
+            elif result.tag == 'INPUT' and result.attrib['STATUS'] == 'LISTEN':
+                break
 
-            if "ALEXA" in words:
-                if self.last_passive and self.recognize_string(self.last_passive, "alexa"):
-                    return True
-            print("Switching to passive...")
-            self.passive = True
+        print("Clearing")
+        self.julius.client.results.queue.clear()
+        print("Clearing finished")
+        print("Finished activated " + str(ret))
 
-        return False
+        return ret
 
     def passive_recognize(self):
 
         while self.running:
             try:
+                if self.active:
+                    print("Activated")
 
-                if self.passive:
-                    print("Recording for julius")
+                    self.playback.play_high_beep()
+                    discover_matrix().unpause()  # todo test
+
+                    print("Waiting for input...")
+
                     data = self.get_segments()
-                    if data is self.STOP_TOKEN:
+                    # todo only continue if there's enough data
+                    if data is None:
                         break
 
-                    self.last_passive = data
+                    self.recognize(data)
+
+                    self.passive = True
+                    self.active = False
+                    print("Switching to passive...")
+                elif self.passive:
+                    print("Recording for julius")
+                    data = self.get_segments()
+                    if data is None:
+                        break
+
                     print("Sending audio to julius")
+                    # todo stuck in here
                     self.julius.send_audio(data)
                     print("Finished")
-                    self.passive = False
+
+                    self.active = self.is_activated(data)
+                    if self.active:
+                        self.passive = False
                 else:
-                    if self.is_activated():
-                        print("Activated")
-
-                        self.playback.play_high_beep()
-                        discover_matrix().unpause()  # todo test
-
-                        print("Waiting for input...")
-
-                        data = self.get_segments()
-                        # todo only continue if there's enough data
-                        if data is self.STOP_TOKEN:
-                            break
-
-                        self.recognize(data)
-
-                        self.passive = True
-                        print("Switching to passive...")
+                    print "Hmm"
+                    print "Passive " + str(self.passive)
+                    print "Active " + str(self.active)
 
             except KeyboardInterrupt:
                 break
